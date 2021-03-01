@@ -3,6 +3,7 @@
 ## master / unreleased
 
 * [ENHANCEMENT] Add `EtcdAllocatingTooMuchMemory` alert for monitoring etcd memory usage. #261
+* [ENHANCEMENT] Update `etcd-operator` to latest version (see https://github.com/grafana/jsonnet-libs/pull/480). #263
 
 ## 1.7.0 / 2021-02-24
 
