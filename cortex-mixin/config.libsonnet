@@ -33,6 +33,7 @@
       query_frontend: '(query-frontend|cortex$)',
       query_scheduler: 'query-scheduler',  // Not part of single-binary.
       table_manager: '(table-manager|cortex$)',
+      ring_members: '(distributor|ingester|querier|cortex|ruler)',
       store_gateway: '(store-gateway|cortex$)',
       gateway: 'cortex-gw',
       compactor: 'compactor.*',  // Match also custom compactor deployments.
