@@ -33,7 +33,9 @@
       query_frontend: '(query-frontend|cortex$)',
       query_scheduler: 'query-scheduler',  // Not part of single-binary.
       table_manager: '(table-manager|cortex$)',
-      ring_members: '(compactor|distributor|ingester|querier|ruler|store-gateway|cortex)',
+      // ingester-.* accommodates multiple ingester StatefulSets or Deployments.
+      // cortex$ prevents matching the cortex-gateway.
+      ring_members: '(compactor|distributor|ingester-.*|querier|ruler|store-gateway|cortex$)',
       store_gateway: '(store-gateway|cortex$)',
       gateway: 'cortex-gw',
       compactor: 'compactor.*',  // Match also custom compactor deployments.
