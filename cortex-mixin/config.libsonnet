@@ -6,7 +6,7 @@
     // Switch for overall storage engine.
     // May contain 'chunks', 'blocks' or both.
     // Enables chunks- or blocks- specific panels and dashboards.
-    storage_engine: ['chunks', 'blocks'],
+    storage_engine: ['blocks'],
 
     // For chunks backend, switch for chunk index type.
     // May contain 'bigtable', 'dynamodb' or 'cassandra'.
@@ -35,13 +35,14 @@
       table_manager: '(table-manager|cortex$)',
       ring_members: ['compactor', 'distributor', 'ingester-.*', 'querier', 'ruler', 'store-gateway', 'cortex'],
       store_gateway: '(store-gateway|cortex$)',
-      gateway: 'cortex-gw',
+      gateway: '(gateway|cortex-gw|cortex-gw-internal)',
       compactor: 'compactor.*',  // Match also custom compactor deployments.
     },
 
-    // Labels used to in alert aggregations - should uniquely identify
-    // a single Cortex cluster.
-    alert_aggregation_labels: 'cluster, namespace',
+    // Grouping labels, to uniquely identify and group by {jobs, clusters}
+    job_labels: ['cluster', 'namespace', 'job'],
+    cluster_labels: ['cluster', 'namespace'],
+
     cortex_p99_latency_threshold_seconds: 2.5,
 
     // Whether resources dashboards are enabled (based on cAdvisor metrics).
@@ -50,7 +51,22 @@
     // The label used to differentiate between different application instances (i.e. 'pod' in a kubernetes install).
     per_instance_label: 'pod',
 
+    // Name selectors for different application instances, using the "per_instance_label".
+    instance_names: {
+      compactor: 'compactor.*',
+      alertmanager: 'alertmanager.*',
+    },
+
     // The label used to differentiate between different nodes (i.e. servers).
     per_node_label: 'instance',
+
+    // Whether certain dashboard description headers should be shown
+    show_dashboard_descriptions: {
+      writes: true,
+      reads: true,
+    },
+
+    // The routes to exclude from alerts.
+    alert_excluded_routes: [],
   },
 }

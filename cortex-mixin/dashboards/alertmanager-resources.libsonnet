@@ -43,45 +43,25 @@ local utils = import 'mixin-utils/utils.libsonnet';
     .addRow(
       $.row('Network')
       .addPanel(
-        $.panel('Receive Bandwidth') +
-        $.queryPanel('sum by(pod) (rate(container_network_receive_bytes_total{%s,pod=~"alertmanager.*"}[$__rate_interval]))' % $.namespaceMatcher(), '{{pod}}') +
-        $.stack +
-        { yaxes: $.yaxes('Bps') },
+        $.containerNetworkReceiveBytesPanel($._config.instance_names.alertmanager),
       )
       .addPanel(
-        $.panel('Transmit Bandwidth') +
-        $.queryPanel('sum by(pod) (rate(container_network_transmit_bytes_total{%s,pod=~"alertmanager.*"}[$__rate_interval]))' % $.namespaceMatcher(), '{{pod}}') +
-        $.stack +
-        { yaxes: $.yaxes('Bps') },
+        $.containerNetworkTransmitBytesPanel($._config.instance_names.alertmanager),
       )
     )
     .addRow(
       $.row('Disk')
       .addPanel(
-        $.panel('Writes') +
-        $.queryPanel(
-          'sum by(%s, %s, device) (rate(node_disk_written_bytes_total[$__rate_interval])) + %s' % [$._config.per_node_label, $._config.per_instance_label, $.filterNodeDiskContainer('alertmanager')],
-          '{{%s}} - {{device}}' % $._config.per_instance_label
-        ) +
-        $.stack +
-        { yaxes: $.yaxes('Bps') },
+        $.containerDiskWritesPanel('Writes', 'alertmanager'),
       )
       .addPanel(
-        $.panel('Reads') +
-        $.queryPanel(
-          'sum by(%s, %s, device) (rate(node_disk_read_bytes_total[$__rate_interval])) + %s' % [$._config.per_node_label, $._config.per_instance_label, $.filterNodeDiskContainer('alertmanager')],
-          '{{%s}} - {{device}}' % $._config.per_instance_label
-        ) +
-        $.stack +
-        { yaxes: $.yaxes('Bps') },
+        $.containerDiskReadsPanel('Reads', 'alertmanager'),
       )
     )
     .addRow(
       $.row('')
       .addPanel(
-        $.panel('Disk Space Utilization') +
-        $.queryPanel('max by(persistentvolumeclaim) (kubelet_volume_stats_used_bytes{%s} / kubelet_volume_stats_capacity_bytes{%s}) and count by(persistentvolumeclaim) (kube_persistentvolumeclaim_labels{%s,label_name="alertmanager"})' % [$.namespaceMatcher(), $.namespaceMatcher(), $.namespaceMatcher()], '{{persistentvolumeclaim}}') +
-        { yaxes: $.yaxes('percentunit') },
+        $.containerDiskSpaceUtilization('Disk Space Utilization', 'alertmanager'),
       )
     ),
 }

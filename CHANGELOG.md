@@ -2,6 +2,46 @@
 
 ## master / unreleased
 
+* [CHANGE] `namespace` template variable in dashboards now only selects namespaces for selected clusters. #311
+* [CHANGE] Alertmanager: mounted overrides configmap to alertmanager too. #315
+* [CHANGE] Memcached: upgraded memcached from `1.5.17` to `1.6.9`. #316
+* [CHANGE] `CortexIngesterRestarts` alert severity changed from `critical` to `warning`. #321
+* [CHANGE] Store-gateway: increased memory request and limit respectively from 6GB / 6GB to 12GB / 18GB. #322
+* [CHANGE] Store-gateway: increased `-blocks-storage.bucket-store.max-chunk-pool-bytes` from 2GB (default) to 12GB. #322
+* [CHANGE] Dashboards: added overridable `job_labels` and `cluster_labels` to the configuration object as label lists to uniquely identify jobs and clusters in the metric names and group-by lists in dashboards. #319
+* [CHANGE] Dashboards: `alert_aggregation_labels` has been removed from the configuration and overriding this value has been deprecated. Instead the labels are now defined by the `cluster_labels` list, and should be overridden accordingly through that list. #319
+* [CHANGE] Ingester/Ruler: set `-server.grpc-max-send-msg-size-bytes` and `-server.grpc-max-send-msg-size-bytes` to sensible default values (10MB). #326
+* [CHANGE] Renamed `CortexCompactorHasNotUploadedBlocksSinceStart` to `CortexCompactorHasNotUploadedBlocks`. #334
+* [CHANGE] Renamed `CortexCompactorRunFailed` to `CortexCompactorHasNotSuccessfullyRunCompaction`. #334
+* [CHANGE] Renamed `CortexInconsistentConfig` alert to `CortexInconsistentRuntimeConfig` and increased severity to `critical`. #335
+* [CHANGE] Increased `CortexBadRuntimeConfig` alert severity to `critical` and removed support for `cortex_overrides_last_reload_successful` metric (was removed in Cortex 1.3.0). #335
+* [CHANGE] Grafana 'min step' changed to 15s so dashboard show better detail. #340
+* [CHANGE] Replace `CortexRulerFailedEvaluations` with two new alerts: `CortexRulerTooManyFailedPushes` and `CortexRulerTooManyFailedQueries`. #347
+* [CHANGE] Removed `CortexCacheRequestErrors` alert. This alert was not working because the legacy Cortex cache client instrumentation doesn't track errors. #346
+* [CHANGE] Removed `CortexQuerierCapacityFull` alert. #342
+* [CHANGE] Changes blocks storage alerts to group metrics by the configured `cluster_labels` (supporting the deprecated `alert_aggregation_labels`). #351
+* [ENHANCEMENT] cortex-mixin: Make `cluster_namespace_deployment:kube_pod_container_resource_requests_{cpu_cores,memory_bytes}:sum` backwards compatible with `kube-state-metrics` v2.0.0. #317
+* [ENHANCEMENT] Cortex-mixin: Include `cortex-gw-internal` naming variation in default `gateway` job names. #328
+* [ENHANCEMENT] Ruler dashboard: added object storage metrics. #354
+* [ENHANCEMENT] Alertmanager dashboard: added object storage metrics. #354
+* [ENHANCEMENT] Added documentation text panels and descriptions to reads and writes dashboards. #324
+* [ENHANCEMENT] Dashboards: defined container functions for common resources panels: containerDiskWritesPanel, containerDiskReadsPanel, containerDiskSpaceUtilization. #331
+* [ENHANCEMENT] cortex-mixin: Added `alert_excluded_routes` config to exclude specific routes from alerts. #338
+* [ENHANCEMENT] Added `CortexMemcachedRequestErrors` alert. #346
+* [ENHANCEMENT] Ruler dashboard: added "Per route p99 latency" panel in the "Configuration API" row. #353
+* [BUGFIX] Fixed `CortexIngesterHasNotShippedBlocks` alert false positive in case an ingester instance had ingested samples in the past, then no traffic was received for a long period and then it started receiving samples again. #308
+* [BUGFIX] Alertmanager: fixed `--alertmanager.cluster.peers` CLI flag passed to alertmanager when HA is enabled. #329
+* [BUGFIX] Fixed `CortexInconsistentRuntimeConfig` metric. #335
+
+## 1.9.0 / 2021-05-18
+
+* [CHANGE] Replace use of removed Cortex CLI flag `-querier.compress-http-responses` for query frontend with `-api.response-compression-enabled`. #299
+* [CHANGE] The default dashboards config now display panels for the Cortex blocks storage only. If you're running Cortex chunks storage, please change `storage_engine` config to `['chunks']` or `['chunks', 'blocks']` if running both. #302
+* [CHANGE] Enabled index-header lazy loading in store-gateways. #303
+* [CHANGE] Replaced the deprecated CLI flag `-limits.per-user-override-config` (removed in Cortex 1.9) with `-runtime-config.file`. #304
+* [CHANGE] Ruler: changed ruler config to use the new storage config. #306
+* [CHANGE] Ruler: enabled API response compression. #306
+* [CHANGE] Alertmanager: changed alertmanager config to use the new storage config. #307
 * [FEATURE] Added "Cortex / Rollout progress" dashboard. #289 #290
 * [FEATURE] Added support for using query-scheduler component, which moves the queue out of query-frontend, and allows scaling up of query-frontend component. #295
 * [ENHANCEMENT] Added `newCompactorStatefulSet()` function to create a custom statefulset for the compactor. #287
@@ -13,6 +53,7 @@
   * `CortexIngesterReachingTenantsLimit`
 * [ENHANCEMENT] Improved `CortexRulerFailedRingCheck` to avoid firing in case of very short errors. #297
 * [BUGFIX] Fixed `CortexCompactorRunFailed` false positives. #288
+* [BUGFIX] Add missing components (admin-api, compactor, store-gateway) to `CortexGossipMembersMismatch`. #305
 
 ## 1.8.0 / 2021-03-25
 
@@ -45,7 +86,7 @@
   - Cortex / Queries: added bucket index load operations and latency (available only when bucket index is enabled)
   - Alerts: added "CortexBucketIndexNotUpdated" (bucket index only) and "CortexTenantHasPartialBlocks"
 * [ENHANCEMENT] The name of the overrides configmap is now customisable via `$._config.overrides_configmap`. #244
-* [ENHANCEMENT] Added flag to control usage of bucket-index, and enable it by default when using blocks. #254
+* [ENHANCEMENT] Added flag to control usage of bucket-index and disable it by default when using blocks. #254
 * [ENHANCEMENT] Added the alert `CortexIngesterHasUnshippedBlocks`. #255
 * [BUGFIX] Honor configured `per_instance_label` in all panels. #239
 * [BUGFIX] `CortexRequestLatency` alert now ignores long-running requests on query-scheduler. #242

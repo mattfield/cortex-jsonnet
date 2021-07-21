@@ -198,7 +198,7 @@
 
     // Shared between the Ruler and Querier
     queryConfig: {
-      'limits.per-user-override-config': '/etc/cortex/overrides.yaml',
+      'runtime-config.file': '/etc/cortex/overrides.yaml',
 
       // Limit the size of the rows we read from the index.
       'store.cardinality-limit': 1e6,
@@ -253,27 +253,24 @@
     },
 
     ruler_enabled: false,
-    ruler_client_type: error 'you must specify a storage backend type for the ruler (azure, configdb, gcs, s3, local)',
-    // TODO: Generic client generating functions would be nice.
-    ruler_s3_bucket_name: $._config.s3_bucket_name,
+    ruler_client_type: error 'you must specify a storage backend type for the ruler (azure, gcs, s3, local)',
+    ruler_s3_bucket_name: error 'you must specify the ruler S3 bucket name',
     ruler_gcs_bucket_name: error 'must specify a GCS bucket name',
 
     rulerClientConfig:
       {
-        'ruler.storage.type': $._config.ruler_client_type,
+        'ruler-storage.backend': $._config.ruler_client_type,
       } +
       {
-        configdb: {
-          configs_api_url: 'config.%s.svc.cluster.local' % $._config.namespace,
-        },
         gcs: {
-          'ruler.storage.gcs.bucketname': $._config.ruler_gcs_bucket_name,
+          'ruler-storage.gcs.bucket-name': $._config.ruler_gcs_bucket_name,
         },
         s3: {
-          'ruler.storage.s3.url': 'https://%s/%s' % [$._config.aws_region, $._config.ruler_s3_bucket_name],
+          'ruler-storage.s3.region': $._config.aws_region,
+          'ruler-storage.s3.bucket-name': $._config.ruler_s3_bucket_name,
         },
         'local': {
-          'ruler.storage.local.directory': $._config.ruler_local_directory,
+          'ruler-storage.local.directory': $._config.ruler_local_directory,
         },
       }[$._config.ruler_client_type],
 
@@ -283,26 +280,24 @@
       fallback_config: {},
     },
 
-    alertmanager_client_type: error 'you must specify a storage backend type for the alertmanager (azure, configdb, gcs, s3, local)',
-    alertmanager_s3_bucket_name: $._config.s3_bucket_name,
+    alertmanager_client_type: error 'you must specify a storage backend type for the alertmanager (azure, gcs, s3, local)',
+    alertmanager_s3_bucket_name: error 'you must specify the alertmanager S3 bucket name',
     alertmanager_gcs_bucket_name: error 'must specify a GCS bucket name',
 
     alertmanagerStorageClientConfig:
       {
-        'alertmanager.storage.type': $._config.alertmanager_client_type,
+        'alertmanager-storage.backend': $._config.alertmanager_client_type,
       } +
       {
-        configdb: {
-          configs_api_url: 'config.%s.svc.cluster.local' % $._config.namespace,
-        },
         gcs: {
-          'alertmanager.storage.gcs.bucketname': $._config.alertmanager_gcs_bucket_name,
+          'alertmanager-storage.gcs.bucket-name': $._config.alertmanager_gcs_bucket_name,
         },
         s3: {
-          'alertmanager.storage.s3.url': 'https://%s/%s' % [$._config.aws_region, $._config.alertmanager_s3_bucket_name],
+          'alertmanager-storage.s3.region': $._config.aws_region,
+          'alertmanager-storage.s3.bucket-name': $._config.alertmanager_s3_bucket_name,
         },
         'local': {
-          'alertmanager.storage.local.directory': $._config.alertmanager_local_directory,
+          'alertmanager-storage.local.path': $._config.alertmanager_local_directory,
         },
       }[$._config.alertmanager_client_type],
 

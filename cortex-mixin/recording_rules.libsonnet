@@ -1,6 +1,12 @@
 local utils = import 'mixin-utils/utils.libsonnet';
 
 {
+  local _config = {
+    max_series_per_ingester: 1.5e6,
+    max_samples_per_sec_per_ingester: 80e3,
+    max_samples_per_sec_per_distributor: 240e3,
+    limit_utilisation_target: 0.6,
+  } + $._config + $._group_config,
   prometheusRules+:: {
     groups+: [
       {
@@ -51,20 +57,14 @@ local utils = import 'mixin-utils/utils.libsonnet';
         name: 'cortex_received_samples',
         rules: [
           {
-            record: 'cluster_namespace_job:cortex_distributor_received_samples:rate5m',
+            record: '%(group_prefix_jobs)s:cortex_distributor_received_samples:rate5m' % _config,
             expr: |||
-              sum by (cluster, namespace, job) (rate(cortex_distributor_received_samples_total[5m]))
-            |||,
+              sum by (%(group_by_job)s) (rate(cortex_distributor_received_samples_total[5m]))
+            ||| % _config,
           },
         ],
       },
       {
-        local _config = {
-          max_series_per_ingester: 1.5e6,
-          max_samples_per_sec_per_ingester: 80e3,
-          max_samples_per_sec_per_distributor: 240e3,
-          limit_utilisation_target: 0.6,
-        },
         name: 'cortex_scaling_rules',
         rules: [
           {
@@ -89,7 +89,7 @@ local utils = import 'mixin-utils/utils.libsonnet';
               ceil(
                 quantile_over_time(0.99,
                   sum by (cluster, namespace) (
-                    cluster_namespace_job:cortex_distributor_received_samples:rate5m
+                    %(group_prefix_jobs)s:cortex_distributor_received_samples:rate5m
                   )[24h:]
                 )
                 / %(max_samples_per_sec_per_distributor)s
@@ -123,7 +123,7 @@ local utils = import 'mixin-utils/utils.libsonnet';
               ceil(
                 quantile_over_time(0.99,
                   sum by (cluster, namespace) (
-                    cluster_namespace_job:cortex_distributor_received_samples:rate5m
+                    %(group_prefix_jobs)s:cortex_distributor_received_samples:rate5m
                   )[24h:]
                 )
                 * 3 / %(max_samples_per_sec_per_ingester)s
@@ -213,10 +213,30 @@ local utils = import 'mixin-utils/utils.libsonnet';
             // Convenience rule to get the CPU request for both a deployment and a statefulset.
             record: 'cluster_namespace_deployment:kube_pod_container_resource_requests_cpu_cores:sum',
             expr: |||
-              sum by (cluster, namespace, deployment) (
-                label_replace(
-                  kube_pod_container_resource_requests_cpu_cores,
-                  "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+              # This recording rule is made compatible with the breaking changes introduced in kube-state-metrics v2
+              # that remove resource metrics, ref:
+              # - https://github.com/kubernetes/kube-state-metrics/blob/master/CHANGELOG.md#v200-alpha--2020-09-16
+              # - https://github.com/kubernetes/kube-state-metrics/pull/1004
+              #
+              # This is the old expression, compatible with kube-state-metrics < v2.0.0,
+              # where kube_pod_container_resource_requests_cpu_cores was removed:
+              (
+                sum by (cluster, namespace, deployment) (
+                  label_replace(
+                    kube_pod_container_resource_requests_cpu_cores,
+                    "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+                  )
+                )
+              )
+              or
+              # This expression is compatible with kube-state-metrics >= v1.4.0,
+              # where kube_pod_container_resource_requests was introduced.
+              (
+                sum by (cluster, namespace, deployment) (
+                  label_replace(
+                    kube_pod_container_resource_requests{resource="cpu"},
+                    "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+                  )
                 )
               )
             |||,
@@ -255,10 +275,30 @@ local utils = import 'mixin-utils/utils.libsonnet';
             // Convenience rule to get the Memory request for both a deployment and a statefulset.
             record: 'cluster_namespace_deployment:kube_pod_container_resource_requests_memory_bytes:sum',
             expr: |||
-              sum by (cluster, namespace, deployment) (
-                label_replace(
-                  kube_pod_container_resource_requests_memory_bytes,
-                  "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+              # This recording rule is made compatible with the breaking changes introduced in kube-state-metrics v2
+              # that remove resource metrics, ref:
+              # - https://github.com/kubernetes/kube-state-metrics/blob/master/CHANGELOG.md#v200-alpha--2020-09-16
+              # - https://github.com/kubernetes/kube-state-metrics/pull/1004
+              #
+              # This is the old expression, compatible with kube-state-metrics < v2.0.0,
+              # where kube_pod_container_resource_requests_memory_bytes was removed:
+              (
+                sum by (cluster, namespace, deployment) (
+                  label_replace(
+                    kube_pod_container_resource_requests_memory_bytes,
+                    "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+                  )
+                )
+              )
+              or
+              # This expression is compatible with kube-state-metrics >= v1.4.0,
+              # where kube_pod_container_resource_requests was introduced.
+              (
+                sum by (cluster, namespace, deployment) (
+                  label_replace(
+                    kube_pod_container_resource_requests{resource="memory"},
+                    "deployment", "$1", "pod", "(.*)-(?:([0-9]+)|([a-z0-9]+)-([a-z0-9]+))"
+                  )
                 )
               )
             |||,

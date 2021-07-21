@@ -22,12 +22,20 @@
     {
       target: 'alertmanager',
       'log.level': 'debug',
+      'runtime-config.file': '/etc/cortex/overrides.yaml',
       'experimental.alertmanager.enable-api': 'true',
       'alertmanager.storage.path': '/data',
       'alertmanager.web.external-url': '%s/alertmanager' % $._config.external_url,
-    } + if hasFallbackConfig then {
-      'alertmanager.configs.fallback': '/configs/alertmanager_fallback_config.yaml',
-    } else {},
+    } +
+    (if hasFallbackConfig then {
+       'alertmanager.configs.fallback': '/configs/alertmanager_fallback_config.yaml',
+     } else {}) +
+    (if isHA then {
+       'alertmanager.cluster.listen-address': '[$(POD_IP)]:%s' % $._config.alertmanager.gossip_port,
+       'alertmanager.cluster.peers': std.join(',', peers),
+     } else {
+       'alertmanager.cluster.listen-address': '',
+     }),
 
   alertmanager_fallback_config_map:
     if hasFallbackConfig then
@@ -58,13 +66,7 @@
         else [],
       ) +
       container.withEnvMixin([container.envType.fromFieldPath('POD_IP', 'status.podIP')]) +
-      container.withArgsMixin(
-        $.util.mapToFlags($.alertmanager_args) +
-        if isHA then
-          ['--alertmanager.cluster.listen-address=[$(POD_IP)]:%s' % $._config.alertmanager.gossip_port] +
-          ['--alertmanager.cluster.peers=%s' % peer for peer in peers]
-        else [],
-      ) +
+      container.withArgsMixin($.util.mapToFlags($.alertmanager_args)) +
       container.withVolumeMountsMixin(
         [volumeMount.new('alertmanager-data', '/data')] +
         if hasFallbackConfig then
@@ -87,6 +89,7 @@
       statefulSet.mixin.spec.template.spec.securityContext.withRunAsUser(0) +
       statefulSet.mixin.spec.updateStrategy.withType('RollingUpdate') +
       statefulSet.mixin.spec.template.spec.withTerminationGracePeriodSeconds(900) +
+      $.util.configVolumeMount($._config.overrides_configmap, '/etc/cortex') +
       statefulSet.mixin.spec.template.spec.withVolumesMixin(
         if hasFallbackConfig then
           [volume.fromConfigMap('alertmanager-fallback-config', 'alertmanager-fallback-config')]

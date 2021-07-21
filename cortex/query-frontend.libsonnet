@@ -26,16 +26,16 @@
       // So that exporters like cloudwatch can still send in data and be un-cached.
       'frontend.max-cache-freshness': '10m',
 
-      // Compress HTTP responses; improves latency for very big results and slow
+      // Use GZIP compression for API responses; improves latency for very big results and slow
       // connections.
-      'querier.compress-http-responses': true,
+      'api.response-compression-enabled': true,
 
       // So it can receive big responses from the querier.
       'server.grpc-max-recv-msg-size-bytes': 100 << 20,
 
       // Limit queries to 500 days, allow this to be override per-user.
       'store.max-query-length': '12000h',  // 500 Days
-      'limits.per-user-override-config': '/etc/cortex/overrides.yaml',
+      'runtime-config.file': '/etc/cortex/overrides.yaml',
     } + (
       if $._config.queryFrontend.sharded_queries_enabled then
         {

@@ -18,7 +18,7 @@
             severity: 'critical',
           },
           annotations: {
-            message: 'There are {{ printf "%f" $value }} unhealthy ingester(s).',
+            message: 'Cortex cluster %(alert_aggregation_variables)s has {{ printf "%%f" $value }} unhealthy ingester(s).' % $._config,
           },
         },
         {
@@ -26,28 +26,39 @@
           // Note if alert_aggregation_labels is "job", this will repeat the label. But
           // prometheus seems to tolerate that.
           expr: |||
-            100 * sum by (%s, job, route) (rate(cortex_request_duration_seconds_count{status_code=~"5..",route!~"ready"}[1m]))
+            100 * sum by (%(group_by)s, job, route) (rate(cortex_request_duration_seconds_count{status_code=~"5..",route!~"%(excluded_routes)s"}[1m]))
               /
-            sum by (%s, job, route) (rate(cortex_request_duration_seconds_count{route!~"ready"}[1m]))
+            sum by (%(group_by)s, job, route) (rate(cortex_request_duration_seconds_count{route!~"%(excluded_routes)s"}[1m]))
               > 1
-          ||| % [$._config.alert_aggregation_labels, $._config.alert_aggregation_labels],
+          ||| % {
+            group_by: $._config.alert_aggregation_labels,
+            excluded_routes: std.join('|', ['ready'] + $._config.alert_excluded_routes),
+          },
           'for': '15m',
           labels: {
             severity: 'critical',
           },
           annotations: {
             message: |||
-              {{ $labels.job }} {{ $labels.route }} is experiencing {{ printf "%.2f" $value }}% errors.
-            |||,
+              The route {{ $labels.route }} in %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% errors.
+            ||| % $._config,
           },
         },
         {
           alert: 'CortexRequestLatency',
           expr: |||
-            cluster_namespace_job_route:cortex_request_duration_seconds:99quantile{route!~"metrics|/frontend.Frontend/Process|ready|/schedulerpb.SchedulerForFrontend/FrontendLoop|/schedulerpb.SchedulerForQuerier/QuerierLoop"}
+            %(group_prefix_jobs)s_route:cortex_request_duration_seconds:99quantile{route!~"%(excluded_routes)s"}
                >
             %(cortex_p99_latency_threshold_seconds)s
-          ||| % $._config,
+          ||| % $._config {
+            excluded_routes: std.join('|', [
+              'metrics',
+              '/frontend.Frontend/Process',
+              'ready',
+              '/schedulerpb.SchedulerForFrontend/FrontendLoop',
+              '/schedulerpb.SchedulerForQuerier/QuerierLoop',
+            ] + $._config.alert_excluded_routes),
+          },
           'for': '15m',
           labels: {
             severity: 'warning',
@@ -92,63 +103,39 @@
           },
           annotations: {
             message: |||
-              Incorrect results for {{ printf "%.2f" $value }}% of queries.
-            |||,
+              The Cortex cluster %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% incorrect query results.
+            ||| % $._config,
           },
         },
         {
-          alert: 'CortexInconsistentConfig',
+          alert: 'CortexInconsistentRuntimeConfig',
           expr: |||
-            count(count by(%s, job, sha256) (cortex_config_hash)) without(sha256) > 1
+            count(count by(%s, job, sha256) (cortex_runtime_config_hash)) without(sha256) > 1
           ||| % $._config.alert_aggregation_labels,
           'for': '1h',
-          labels: {
-            severity: 'warning',
-          },
-          annotations: {
-            message: |||
-              An inconsistent config file hash is used across cluster {{ $labels.job }}.
-            |||,
-          },
-        },
-        {
-          // As of https://github.com/cortexproject/cortex/pull/2092, this metric is
-          // only exposed when it is supposed to be non-zero, so we don't need to do
-          // any special filtering on the job label.
-          // The metric itself was renamed in
-          // https://github.com/cortexproject/cortex/pull/2874
-          //
-          // TODO: Remove deprecated metric name of
-          // cortex_overrides_last_reload_successful in the future
-          alert: 'CortexBadRuntimeConfig',
-          expr: |||
-            cortex_runtime_config_last_reload_successful == 0
-              or
-            cortex_overrides_last_reload_successful == 0
-          |||,
-          // Alert quicker for human errors.
-          'for': '5m',
-          labels: {
-            severity: 'warning',
-          },
-          annotations: {
-            message: |||
-              {{ $labels.job }} failed to reload runtime config.
-            |||,
-          },
-        },
-        {
-          alert: 'CortexQuerierCapacityFull',
-          expr: |||
-            prometheus_engine_queries_concurrent_max{job=~".+/(cortex|ruler|querier)"} - prometheus_engine_queries{job=~".+/(cortex|ruler|querier)"} == 0
-          |||,
-          'for': '5m',  // We don't want to block for longer.
           labels: {
             severity: 'critical',
           },
           annotations: {
             message: |||
-              {{ $labels.job }} is at capacity processing queries.
+              An inconsistent runtime config file is used across cluster %(alert_aggregation_variables)s.
+            ||| % $._config,
+          },
+        },
+        {
+          alert: 'CortexBadRuntimeConfig',
+          expr: |||
+            # The metric value is reset to 0 on error while reloading the config at runtime.
+            cortex_runtime_config_last_reload_successful == 0
+          |||,
+          // Alert quicker for human errors.
+          'for': '5m',
+          labels: {
+            severity: 'critical',
+          },
+          annotations: {
+            message: |||
+              {{ $labels.job }} failed to reload runtime config.
             |||,
           },
         },
@@ -163,8 +150,8 @@
           },
           annotations: {
             message: |||
-              There are {{ $value }} queued up queries in query-frontend.
-            |||,
+              There are {{ $value }} queued up queries in %(alert_aggregation_variables)s query-frontend.
+            ||| % $._config,
           },
         },
         {
@@ -178,35 +165,38 @@
           },
           annotations: {
             message: |||
-              There are {{ $value }} queued up queries in query-scheduler.
-            |||,
+              There are {{ $value }} queued up queries in %(alert_aggregation_variables)s query-scheduler.
+            ||| % $._config,
           },
         },
         {
-          alert: 'CortexCacheRequestErrors',
+          alert: 'CortexMemcachedRequestErrors',
           expr: |||
-            100 * sum by (%s, method) (rate(cortex_cache_request_duration_seconds_count{status_code=~"5.."}[1m]))
-              /
-            sum  by (%s, method) (rate(cortex_cache_request_duration_seconds_count[1m]))
-              > 1
+            (
+              sum by(%s, name, operation) (rate(thanos_memcached_operation_failures_total[1m])) /
+              sum by(%s, name, operation) (rate(thanos_memcached_operations_total[1m]))
+            ) * 100 > 5
           ||| % [$._config.alert_aggregation_labels, $._config.alert_aggregation_labels],
-          'for': '15m',
+          'for': '5m',
           labels: {
             severity: 'warning',
           },
           annotations: {
             message: |||
-              Cache {{ $labels.method }} is experiencing {{ printf "%.2f" $value }}% errors.
-            |||,
+              Memcached {{ $labels.name }} used by Cortex %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% errors for {{ $labels.operation }} operation.
+            ||| % $._config,
           },
         },
         {
           alert: 'CortexIngesterRestarts',
           expr: |||
-            changes(process_start_time_seconds{job=~".+(cortex|ingester.*)"}[30m]) > 1
+            changes(process_start_time_seconds{job=~".+(cortex|ingester.*)"}[30m]) >= 2
           |||,
           labels: {
-            severity: 'critical',
+            // This alert is on a cause not symptom. A couple of ingesters restarts may be suspicious but
+            // not necessarily an issue (eg. may happen because of the K8S node autoscaler), so we're
+            // keeping the alert as warning as a signal in case of an outage.
+            severity: 'warning',
           },
           annotations: {
             message: '{{ $labels.job }}/{{ $labels.instance }} has restarted {{ printf "%.2f" $value }} times in the last 30 mins.',
@@ -445,26 +435,26 @@
           },
           annotations: {
             message: |||
-              Chunk memcached cluster is too small, should be at least {{ printf "%.2f" $value }}GB.
-            |||,
+              Chunk memcached cluster in %(alert_aggregation_variables)s is too small, should be at least {{ printf "%%.2f" $value }}GB.
+            ||| % $._config,
           },
         },
         {
           alert: 'CortexProvisioningTooManyActiveSeries',
-          // 1.5 million active series per ingester max.
+          // We target each ingester to 1.5M in-memory series. This alert fires if the average
+          // number of series / ingester in a Cortex cluster is > 1.6M for 2h (we compact
+          // the TSDB head every 2h).
           expr: |||
             avg by (%s) (cortex_ingester_memory_series) > 1.6e6
-              and
-            sum by (%s) (rate(cortex_ingester_received_chunks[1h])) == 0
-          ||| % [$._config.alert_aggregation_labels, $._config.alert_aggregation_labels],
-          'for': '1h',
+          ||| % [$._config.alert_aggregation_labels],
+          'for': '2h',
           labels: {
             severity: 'warning',
           },
           annotations: {
             message: |||
-              Too many active series for ingesters, add more ingesters.
-            |||,
+              The number of in-memory series per ingester in %(alert_aggregation_variables)s is too high.
+            ||| % $._config,
           },
         },
         {
@@ -479,8 +469,8 @@
           },
           annotations: {
             message: |||
-              High QPS for ingesters, add more ingesters.
-            |||,
+              Ingesters in %(alert_aggregation_variables)s ingest too many samples per second.
+            ||| % $._config,
           },
         },
         {
@@ -498,8 +488,8 @@
           },
           annotations: {
             message: |||
-              Too much memory being used by {{ $labels.namespace }}/{{ $labels.pod }} - add more ingesters.
-            |||,
+              Ingester {{ $labels.pod }} in %(alert_aggregation_variables)s is using too much memory.
+            ||| % $._config,
           },
         },
         {
@@ -517,8 +507,8 @@
           },
           annotations: {
             message: |||
-              Too much memory being used by {{ $labels.namespace }}/{{ $labels.pod }} - add more ingesters.
-            |||,
+              Ingester {{ $labels.pod }} in %(alert_aggregation_variables)s is using too much memory.
+            ||| % $._config,
           },
         },
       ],
@@ -527,12 +517,32 @@
       name: 'ruler_alerts',
       rules: [
         {
-          alert: 'CortexRulerFailedEvaluations',
+          alert: 'CortexRulerTooManyFailedPushes',
           expr: |||
-            sum by (%s, instance, rule_group) (rate(cortex_prometheus_rule_evaluation_failures_total[1m]))
+            100 * (
+            sum by (%s, instance) (rate(cortex_ruler_write_requests_failed_total[1m]))
               /
-            sum by (%s, instance, rule_group) (rate(cortex_prometheus_rule_evaluations_total[1m]))
-              > 0.01
+            sum by (%s, instance) (rate(cortex_ruler_write_requests_total[1m]))
+            ) > 1
+          ||| % [$._config.alert_aggregation_labels, $._config.alert_aggregation_labels],
+          'for': '5m',
+          labels: {
+            severity: 'critical',
+          },
+          annotations: {
+            message: |||
+              Cortex Ruler {{ $labels.instance }} in %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% write (push) errors.
+            ||| % $._config,
+          },
+        },
+        {
+          alert: 'CortexRulerTooManyFailedQueries',
+          expr: |||
+            100 * (
+            sum by (%s, instance) (rate(cortex_ruler_queries_failed_total[1m]))
+              /
+            sum by (%s, instance) (rate(cortex_ruler_queries_total[1m]))
+            ) > 1
           ||| % [$._config.alert_aggregation_labels, $._config.alert_aggregation_labels],
           'for': '5m',
           labels: {
@@ -540,8 +550,8 @@
           },
           annotations: {
             message: |||
-              Cortex Ruler {{ $labels.instance }} is experiencing {{ printf "%.2f" $value }}% errors for the rule group {{ $labels.rule_group }}.
-            |||,
+              Cortex Ruler {{ $labels.instance }} in %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% errors while evaluating rules.
+            ||| % $._config,
           },
         },
         {
@@ -558,8 +568,8 @@
           },
           annotations: {
             message: |||
-              Cortex Ruler {{ $labels.instance }} is experiencing {{ printf "%.2f" $value }}% missed iterations for the rule group {{ $labels.rule_group }}.
-            |||,
+              Cortex Ruler {{ $labels.instance }} in %(alert_aggregation_variables)s is experiencing {{ printf "%%.2f" $value }}%% missed iterations for the rule group {{ $labels.rule_group }}.
+            ||| % $._config,
           },
         },
         {
@@ -574,8 +584,8 @@
           },
           annotations: {
             message: |||
-              Cortex Rulers {{ $labels.job }} are experiencing errors when checking the ring for rule group ownership.
-            |||,
+              Cortex Rulers in %(alert_aggregation_variables)s are experiencing errors when checking the ring for rule group ownership.
+            ||| % $._config,
           },
         },
       ],
@@ -596,7 +606,7 @@
             severity: 'warning',
           },
           annotations: {
-            message: '{{ $labels.job }}/{{ $labels.instance }} sees incorrect number of gossip members.',
+            message: 'Cortex instance {{ $labels.instance }} in %(alert_aggregation_variables)s sees incorrect number of gossip members.' % $._config,
           },
         },
       ],
@@ -611,7 +621,7 @@
               container_memory_working_set_bytes{container="etcd"}
                 /
               container_spec_memory_limit_bytes{container="etcd"}
-            ) > 0.65 
+            ) > 0.65
           |||,
           'for': '15m',
           labels: {

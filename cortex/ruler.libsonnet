@@ -15,6 +15,7 @@
       // Alertmanager configs
       'ruler.alertmanager-url': 'http://alertmanager.%s.svc.cluster.local/alertmanager' % $._config.namespace,
       'experimental.ruler.enable-api': true,
+      'api.response-compression-enabled': true,
 
       // Ring Configs
       'ruler.enable-sharding': true,
@@ -23,6 +24,8 @@
       // Limits
       'ruler.max-rules-per-rule-group': $._config.limits.ruler_max_rules_per_rule_group,
       'ruler.max-rule-groups-per-tenant': $._config.limits.ruler_max_rule_groups_per_tenant,
+      'server.grpc-max-send-msg-size-bytes': 10 * 1024 * 1024,
+      'server.grpc-max-recv-msg-size-bytes': 10 * 1024 * 1024,
 
       // Storage
       'querier.second-store-engine': $._config.querier_second_storage_engine,
